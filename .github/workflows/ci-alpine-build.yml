@@ -34,8 +34,8 @@ jobs:
         os_id: ["alpine"]
         os_version_id: ["edge"]
         qbt_cross_name:
-          ["armhf", "armv7", "aarch64", "riscv64", "x86_64", "x86"]
-        qbt_libtorrent_version: ["1.2", "2.0"]
+          ["x86_64"]
+        qbt_libtorrent_version: ["1.2"]
         qbt_build_tool: [""]
         qbt_qbittorrent_tag: [""]
         include:

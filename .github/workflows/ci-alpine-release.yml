@@ -14,13 +14,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        qbt_libtorrent_version: ["1.2", "2.0"]
+        qbt_libtorrent_version: ["1.2"]
         include:
           - qbt_libtorrent_version: "1.2"
             preview_release: true
-
-          - qbt_libtorrent_version: "2.0"
-            preview_release: false
 
     name: "Publish release libtorrent-v${{ matrix.qbt_libtorrent_version }}"
 
@@ -45,13 +42,6 @@ jobs:
           pattern: libtorrent-v1.2-*-qbittorrent-nox
           merge-multiple: true
 
-      - name: Host - Download 2.0 qbittorrent-nox artifacts ${{ inputs.distinct_id }}
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
-        with:
-          path: "2.0"
-          pattern: libtorrent-v2.0-*-qbittorrent-nox
-          merge-multiple: true
-
       - name: Host - merge release-info ${{ inputs.distinct_id }}
         env:
           lt_version: ${{ matrix.qbt_libtorrent_version }}
@@ -61,8 +51,8 @@ jobs:
           revision="$(jq -r .revision "${lt_version}"/*-dependency-version.json | sort -nr | head -n1)"
           boost="$(jq -r .boost "${lt_version}"/*-dependency-version.json | head -n1)"
 
-          # this need to check both 1.2 and 2.0 folders to merge the libtorrent versions in the dependency-version.json
-          for dependency_version_json in {1.2,2.0}/*-dependency-version.json; do
+          # this need to check both 1.2 folders to merge the libtorrent versions in the dependency-version.json
+          for dependency_version_json in {1.2}/*-dependency-version.json; do
             if [[ -f ${dependency_version_json} ]]; then
               sed -r 's/"boost": (.*)/BOOST_PLACEHOLDER/g' -i "${dependency_version_json}"
               sed -r 's/"revision": (.*)/REVISION_PLACEHOLDER/g' -i "${dependency_version_json}"

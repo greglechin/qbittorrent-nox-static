@@ -355,8 +355,14 @@ namespace BitTorrent
         virtual void setSuggestMode(bool mode) = 0;
         virtual int sendBufferWatermark() const = 0;
         virtual void setSendBufferWatermark(int value) = 0;
-        virtual void setAllowedFastSetSize(bool value) = 0;
-        virtual bool allowedFastSetSize() const = 0;
+        virtual void setAllowedFastSetSize(int value) = 0;
+        virtual int allowedFastSetSize() const = 0;
+        virtual void setCacheBufferChunkSize(int value) = 0;
+        virtual int cacheBufferChunkSize() const = 0;
+        virtual void setUseDiskCachePool(bool value) = 0;
+        virtual bool useDiskCachePool() const = 0;
+        virtual void setSendNotSentLowWatermark(int value) = 0;
+        virtual int sendNotSentLowWatermark() const = 0;
         virtual void setCloseRedundantConnections(bool value) = 0;
         virtual bool closeRedundantConnections() const = 0;
         virtual void setDhtUploadRateLimit(int value) = 0;

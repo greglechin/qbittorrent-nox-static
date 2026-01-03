@@ -323,8 +323,14 @@ namespace BitTorrent
         void setSuggestMode(bool mode) override;
         int sendBufferWatermark() const override;
         void setSendBufferWatermark(int value) override;
-        void setAllowedFastSetSize(bool value) override;
-        bool allowedFastSetSize() const override;
+        void setAllowedFastSetSize(int value) override;
+        int allowedFastSetSize() const override;
+        void setCacheBufferChunkSize(int value) override;
+        int cacheBufferChunkSize() const override;
+        void setUseDiskCachePool(bool value) override;
+        bool useDiskCachePool() const override;
+        void setSendNotSentLowWatermark(int value) override;
+        int sendNotSentLowWatermark() const override;
         void setCloseRedundantConnections(bool value) override;
         bool closeRedundantConnections() const override;
         void setDhtUploadRateLimit(int value) override;
@@ -678,7 +684,10 @@ namespace BitTorrent
         CachedSettingValue<bool> m_usePieceExtentAffinity;
         CachedSettingValue<bool> m_isSuggestMode;
         CachedSettingValue<int> m_sendBufferWatermark;
-        CachedSettingValue<bool> m_allowedFastSetSize;
+        CachedSettingValue<int> m_allowedFastSetSize;
+        CachedSettingValue<int> m_cacheBufferChunkSize;
+        CachedSettingValue<bool> m_useDiskCachePool;
+        CachedSettingValue<int> m_sendNotSentLowWatermark;
         CachedSettingValue<bool> m_closeRedundantConnections;
         CachedSettingValue<int> m_dhtUploadRateLimit;
         CachedSettingValue<int> m_inactivityTimeout;

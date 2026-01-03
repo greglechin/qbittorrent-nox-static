@@ -423,7 +423,10 @@ SessionImpl::SessionImpl(QObject *parent)
     , m_usePieceExtentAffinity(BITTORRENT_SESSION_KEY(u"PieceExtentAffinity"_s), false)
     , m_isSuggestMode(BITTORRENT_SESSION_KEY(u"SuggestMode"_s), false)
     , m_sendBufferWatermark(BITTORRENT_SESSION_KEY(u"SendBufferWatermark"_s), 500)
-    , m_allowedFastSetSize(BITTORRENT_SESSION_KEY(u"AllowedFastSetSize"_s), false)
+    , m_allowedFastSetSize(BITTORRENT_SESSION_KEY(u"AllowedFastSetSize"_s), 0)
+    , m_cacheBufferChunkSize(BITTORRENT_SESSION_KEY(u"CacheBufferChunkSize"_s), 0)
+    , m_useDiskCachePool(BITTORRENT_SESSION_KEY(u"UseDiskCachePool"_s), false)
+    , m_sendNotSentLowWatermark(BITTORRENT_SESSION_KEY(u"SendNotSentLowWatermark"_s), 524288)
     , m_closeRedundantConnections(BITTORRENT_SESSION_KEY(u"CloseRedundantConnections"_s), false)
     , m_dhtUploadRateLimit(BITTORRENT_SESSION_KEY(u"DhtUploadRateLimit"_s), 20000)
     , m_inactivityTimeout(BITTORRENT_SESSION_KEY(u"InactivityTimeout"_s), 20)
@@ -1720,6 +1723,23 @@ void SessionImpl::initializeNativeSession()
     LogMsg(tr("Peer Exchange (PeX) support: %1").arg(isPeXEnabled() ? tr("ON") : tr("OFF")), Log::INFO);
     LogMsg(tr("Anonymous mode: %1").arg(isAnonymousModeEnabled() ? tr("ON") : tr("OFF")), Log::INFO);
     LogMsg(tr("Encryption support: %1").arg((encryption() == 0) ? tr("ON") : ((encryption() == 1) ? tr("FORCED") : tr("OFF"))), Log::INFO);
+	LogMsg(tr("setAllowedFastSetSize: %1").arg(allowedFastSetSize()), Log::INFO);
+	LogMsg(tr("cacheBufferChunkSize: %1").arg(cacheBufferChunkSize()), Log::INFO);
+	LogMsg(tr("useDiskCachePool: %1").arg(useDiskCachePool() ? tr("ON") : tr("OFF")), Log::INFO);
+	LogMsg(tr("setSendNotSentLowWatermark: %1").arg(sendNotSentLowWatermark()), Log::INFO);
+	LogMsg(tr("setCloseRedundantConnections: %1").arg(closeRedundantConnections() ? tr("ON") : tr("OFF")), Log::INFO);
+	LogMsg(tr("setDhtUploadRateLimit: %1").arg(dhtUploadRateLimit()), Log::INFO);
+	LogMsg(tr("setInactivityTimeout: %1").arg(inactivityTimeout()), Log::INFO);
+	LogMsg(tr("setMaxAllowedInRequestQueue: %1").arg(maxAllowedInRequestQueue()), Log::INFO);
+	LogMsg(tr("setMaxFailCount: %1").arg(maxFailCount()), Log::INFO);
+	LogMsg(tr("setHttpRecvBufferSize: %1").arg(httpRecvBufferSize()), Log::INFO);
+	LogMsg(tr("setMaxRejects: %1").arg(maxRejects()), Log::INFO);
+	LogMsg(tr("setNoAtimeStorage: %1").arg(noAtimeStorage() ? tr("ON") : tr("OFF")), Log::INFO);
+	LogMsg(tr("setPeerTimeout: %1").arg(peerTimeout()), Log::INFO);
+	LogMsg(tr("setReadCacheLineSize: %1").arg(readCacheLineSize()), Log::INFO);
+	LogMsg(tr("setRequestTimeout: %1").arg(requestTimeout()), Log::INFO);
+	LogMsg(tr("setUseReadCache: %1").arg(useReadCache() ? tr("ON") : tr("OFF")), Log::INFO);
+	LogMsg(tr("setWriteCacheLineSize: %1").arg(writeCacheLineSize()), Log::INFO);
 
     m_nativeSession->set_alert_notify([this]()
     {
@@ -2112,32 +2132,32 @@ lt::settings_pack SessionImpl::loadLTSettings() const
         break;
     }
 
-    settingsPack.set_bool(lt::settings_pack::allowed_fast_set_size, false);
-    settingsPack.set_bool(lt::settings_pack::close_redundant_connections, false);
-    settingsPack.set_int(lt::settings_pack::dht_upload_rate_limit, 20000);
-    settingsPack.set_int(lt::settings_pack::inactivity_timeout, 20);
-    settingsPack.set_int(lt::settings_pack::max_allowed_in_request_queue, 2000);
-    settingsPack.set_int(lt::settings_pack::max_failcount, 1);
-    settingsPack.set_int(lt::settings_pack::max_http_recv_buffer_size, 6291456);
-    settingsPack.set_int(lt::settings_pack::max_rejects, 10);
-    settingsPack.set_bool(lt::settings_pack::no_atime_storage, true);
-    settingsPack.set_int(lt::settings_pack::peer_timeout, 20);
-    settingsPack.set_int(lt::settings_pack::read_cache_line_size, 20);
-    settingsPack.set_int(lt::settings_pack::request_timeout, 10);
-    settingsPack.set_bool(lt::settings_pack::use_read_cache, true);
-    settingsPack.set_int(lt::settings_pack::write_cache_line_size, 256);
+    settingsPack.set_int(lt::settings_pack::allowed_fast_set_size, allowedFastSetSize());
+    settingsPack.set_bool(lt::settings_pack::cache_buffer_chunk_size, cacheBufferChunkSize());
+    settingsPack.set_bool(lt::settings_pack::use_disk_cache_pool, useDiskCachePool());
+    settingsPack.set_bool(lt::settings_pack::close_redundant_connections, closeRedundantConnections());
+    settingsPack.set_int(lt::settings_pack::dht_upload_rate_limit, dhtUploadRateLimit());
+    settingsPack.set_int(lt::settings_pack::inactivity_timeout, inactivityTimeout());
+    settingsPack.set_int(lt::settings_pack::max_allowed_in_request_queue, maxAllowedInRequestQueue());
+    settingsPack.set_int(lt::settings_pack::max_failcount, maxFailCount());
+    settingsPack.set_int(lt::settings_pack::max_http_recv_buffer_size, httpRecvBufferSize());
+    settingsPack.set_int(lt::settings_pack::max_rejects, maxRejects());
+    settingsPack.set_bool(lt::settings_pack::no_atime_storage, noAtimeStorage());
+    settingsPack.set_int(lt::settings_pack::peer_timeout, peerTimeout());
+    settingsPack.set_int(lt::settings_pack::read_cache_line_size, readCacheLineSize());
+    settingsPack.set_int(lt::settings_pack::request_timeout, requestTimeout());
+    settingsPack.set_bool(lt::settings_pack::use_read_cache, useReadCache());
+    settingsPack.set_int(lt::settings_pack::write_cache_line_size, writeCacheLineSize());
 
     // old and invalid
-    //settingsPack.set_bool(lt::settings_pack::auto_upload_slots, false);
     //settingsPack.set_int(lt::settings_pack::cache_buffer_chunk_size, 128);
+    //settingsPack.set_bool(lt::settings_pack::use_disk_cache_pool, true);
+
+    //settingsPack.set_bool(lt::settings_pack::auto_upload_slots, false);
     //settingsPack.set_int(lt::settings_pack::disk_cache_algorithm, 2);
     //settingsPack.set_bool(lt::settings_pack::explicit_read_cache, false);
-    //settingsPack.set_bool(lt::settings_pack::lock_disk_cache, false);
-    //settingsPack.set_bool(lt::settings_pack::low_prio_disk, false);
-    //settingsPack.set_int(lt::settings_pack::network_threads, 0);
     //settingsPack.set_bool(lt::settings_pack::optimize_hashing_for_speed, true);
     //settingsPack.set_int(lt::settings_pack::read_job_every, 100);
-    //settingsPack.set_bool(lt::settings_pack::use_disk_cache_pool, true);
     //settingsPack.set_bool(lt::settings_pack::utp_dynamic_sock_buf, true);
 
     return settingsPack;
@@ -4627,17 +4647,62 @@ void SessionImpl::setSendBufferWatermark(const int value)
     configureDeferred();
 }
 
-bool SessionImpl::allowedFastSetSize() const
+int SessionImpl::allowedFastSetSize() const
 {
     return m_allowedFastSetSize;
 }
 
-void SessionImpl::setAllowedFastSetSize(const bool value)
+void SessionImpl::setAllowedFastSetSize(const int value)
 {
     if (value == m_allowedFastSetSize) return;
 
     m_allowedFastSetSize = value;
     configureDeferred();
+    LogMsg(tr("setAllowedFastSetSize: %1").arg(value), Log::INFO);
+
+}
+
+int SessionImpl::cacheBufferChunkSize() const
+{
+    return m_cacheBufferChunkSize;
+}
+
+void SessionImpl::setCacheBufferChunkSize(const int value)
+{
+    if (value == m_cacheBufferChunkSize) return;
+
+    m_cacheBufferChunkSize = value;
+    configureDeferred();
+    LogMsg(tr("cacheBufferChunkSize: %1").arg(value), Log::INFO);
+
+}
+
+bool SessionImpl::useDiskCachePool() const
+{
+    return m_useDiskCachePool;
+}
+
+void SessionImpl::setUseDiskCachePool(const bool value)
+{
+    if (value == m_useDiskCachePool) return;
+
+    m_useDiskCachePool = value;
+    configureDeferred();
+    LogMsg(tr("useDiskCachePool: %1").arg(value ? tr("ON") : tr("OFF")), Log::INFO);
+}
+
+int SessionImpl::sendNotSentLowWatermark() const
+{
+    return m_sendNotSentLowWatermark;
+}
+
+void SessionImpl::setSendNotSentLowWatermark(const int value)
+{
+    if (value == m_sendNotSentLowWatermark) return;
+
+    m_sendNotSentLowWatermark = value;
+    configureDeferred();
+    LogMsg(tr("setSendNotSentLowWatermark: %1").arg(value), Log::INFO);
 }
 
 bool SessionImpl::closeRedundantConnections() const
@@ -4651,6 +4716,7 @@ void SessionImpl::setCloseRedundantConnections(const bool value)
 
     m_closeRedundantConnections = value;
     configureDeferred();
+    LogMsg(tr("setCloseRedundantConnections: %1").arg(value ? tr("ON") : tr("OFF")), Log::INFO);
 }
 
 int SessionImpl::dhtUploadRateLimit() const
@@ -4664,6 +4730,7 @@ void SessionImpl::setDhtUploadRateLimit(const int value)
 
     m_dhtUploadRateLimit = value;
     configureDeferred();
+    LogMsg(tr("setDhtUploadRateLimit: %1").arg(value), Log::INFO);
 }
 
 int SessionImpl::inactivityTimeout() const
@@ -4677,6 +4744,7 @@ void SessionImpl::setInactivityTimeout(const int value)
 
     m_inactivityTimeout = value;
     configureDeferred();
+    LogMsg(tr("setInactivityTimeout: %1").arg(value), Log::INFO);
 }
 
 int SessionImpl::maxAllowedInRequestQueue() const
@@ -4690,6 +4758,7 @@ void SessionImpl::setMaxAllowedInRequestQueue(const int value)
 
     m_maxAllowedInRequestQueue = value;
     configureDeferred();
+    LogMsg(tr("setMaxAllowedInRequestQueue: %1").arg(value), Log::INFO);
 }
 
 int SessionImpl::maxFailCount() const
@@ -4703,6 +4772,7 @@ void SessionImpl::setMaxFailCount(const int value)
 
     m_maxFailCount = value;
     configureDeferred();
+    LogMsg(tr("setMaxFailCount: %1").arg(value), Log::INFO);
 }
 
 int SessionImpl::httpRecvBufferSize() const
@@ -4716,6 +4786,7 @@ void SessionImpl::setHttpRecvBufferSize(const int value)
 
     m_httpRecvBufferSize = value;
     configureDeferred();
+    LogMsg(tr("setHttpRecvBufferSize: %1").arg(value), Log::INFO);
 }
 
 int SessionImpl::maxRejects() const
@@ -4729,6 +4800,7 @@ void SessionImpl::setMaxRejects(const int value)
 
     m_maxRejects = value;
     configureDeferred();
+    LogMsg(tr("setMaxRejects: %1").arg(value), Log::INFO);
 }
 
 bool SessionImpl::noAtimeStorage() const
@@ -4742,6 +4814,7 @@ void SessionImpl::setNoAtimeStorage(const bool value)
 
     m_noAtimeStorage = value;
     configureDeferred();
+    LogMsg(tr("setNoAtimeStorage: %1").arg(value ? tr("ON") : tr("OFF")), Log::INFO);
 }
 
 int SessionImpl::peerTimeout() const
@@ -4755,6 +4828,7 @@ void SessionImpl::setPeerTimeout(const int value)
 
     m_peerTimeout = value;
     configureDeferred();
+    LogMsg(tr("setPeerTimeout: %1").arg(value), Log::INFO);
 }
 
 int SessionImpl::readCacheLineSize() const
@@ -4768,6 +4842,7 @@ void SessionImpl::setReadCacheLineSize(const int value)
 
     m_readCacheLineSize = value;
     configureDeferred();
+    LogMsg(tr("setReadCacheLineSize: %1").arg(value), Log::INFO);
 }
 
 int SessionImpl::requestTimeout() const
@@ -4781,6 +4856,7 @@ void SessionImpl::setRequestTimeout(const int value)
 
     m_requestTimeout = value;
     configureDeferred();
+    LogMsg(tr("setRequestTimeout: %1").arg(value), Log::INFO);
 }
 
 bool SessionImpl::useReadCache() const
@@ -4794,6 +4870,7 @@ void SessionImpl::setUseReadCache(const bool value)
 
     m_useReadCache = value;
     configureDeferred();
+    LogMsg(tr("setUseReadCache: %1").arg(value ? tr("ON") : tr("OFF")), Log::INFO);
 }
 
 int SessionImpl::writeCacheLineSize() const
@@ -4807,6 +4884,7 @@ void SessionImpl::setWriteCacheLineSize(const int value)
 
     m_writeCacheLineSize = value;
     configureDeferred();
+    LogMsg(tr("setWriteCacheLineSize: %1").arg(value), Log::INFO);
 }
 
 int SessionImpl::sendBufferLowWatermark() const

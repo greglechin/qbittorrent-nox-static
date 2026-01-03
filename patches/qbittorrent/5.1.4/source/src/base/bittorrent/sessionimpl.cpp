@@ -423,7 +423,10 @@ SessionImpl::SessionImpl(QObject *parent)
     , m_usePieceExtentAffinity(BITTORRENT_SESSION_KEY(u"PieceExtentAffinity"_s), false)
     , m_isSuggestMode(BITTORRENT_SESSION_KEY(u"SuggestMode"_s), false)
     , m_sendBufferWatermark(BITTORRENT_SESSION_KEY(u"SendBufferWatermark"_s), 500)
-    , m_allowedFastSetSize(BITTORRENT_SESSION_KEY(u"AllowedFastSetSize"_s), false)
+    , m_allowedFastSetSize(BITTORRENT_SESSION_KEY(u"AllowedFastSetSize"_s), 0)
+    , m_cacheBufferChunkSize(BITTORRENT_SESSION_KEY(u"CacheBufferChunkSize"_s), 0)
+    , m_useDiskCachePool(BITTORRENT_SESSION_KEY(u"UseDiskCachePool"_s), false)
+    , m_sendNotSentLowWatermark(BITTORRENT_SESSION_KEY(u"SendNotSentLowWatermark"_s), 524288)
     , m_closeRedundantConnections(BITTORRENT_SESSION_KEY(u"CloseRedundantConnections"_s), false)
     , m_dhtUploadRateLimit(BITTORRENT_SESSION_KEY(u"DhtUploadRateLimit"_s), 20000)
     , m_inactivityTimeout(BITTORRENT_SESSION_KEY(u"InactivityTimeout"_s), 20)
@@ -759,7 +762,7 @@ void SessionImpl::setPeXEnabled(const bool enabled)
 {
     m_isPeXEnabled = enabled;
     if (m_wasPexEnabled != enabled)
-        LogMsg(tr("Restart is required to toggle Peer Exchange (PeX) support"), Log::WARNING);
+        LogMsg(tr("Restart is required to toggle Peer Exchange (PeX) support"), Log::INFO);
 }
 
 bool SessionImpl::isDownloadPathEnabled() const
@@ -1484,7 +1487,7 @@ void SessionImpl::processNextResumeData(ResumeSessionContext *context)
     else
     {
         LogMsg(tr("Failed to resume torrent: inconsistent torrent ID is detected. Torrent: \"%1\"")
-               .arg(torrentID.toString()), Log::WARNING);
+               .arg(torrentID.toString()), Log::INFO);
         return;
     }
 #else
@@ -1494,7 +1497,7 @@ void SessionImpl::processNextResumeData(ResumeSessionContext *context)
     if (torrentID != TorrentID::fromInfoHash(infoHash))
     {
         LogMsg(tr("Failed to resume torrent: inconsistent torrent ID is detected. Torrent: \"%1\"")
-               .arg(torrentID.toString()), Log::WARNING);
+               .arg(torrentID.toString()), Log::INFO);
         return;
     }
 #endif
@@ -1529,13 +1532,13 @@ void SessionImpl::processNextResumeData(ResumeSessionContext *context)
                 isCategoryRecovered = true;
                 LogMsg(tr("Detected inconsistent data: category is missing from the configuration file."
                           " Category will be recovered but its settings will be reset to default."
-                          " Torrent: \"%1\". Category: \"%2\"").arg(torrentID.toString(), category), Log::WARNING);
+                          " Torrent: \"%1\". Category: \"%2\"").arg(torrentID.toString(), category), Log::INFO);
             }
             else
             {
                 resumeData.category.clear();
                 LogMsg(tr("Detected inconsistent data: invalid category. Torrent: \"%1\". Category: \"%2\"")
-                       .arg(torrentID.toString(), category), Log::WARNING);
+                       .arg(torrentID.toString(), category), Log::INFO);
             }
         }
 
@@ -1551,7 +1554,7 @@ void SessionImpl::processNextResumeData(ResumeSessionContext *context)
                 resumeData.downloadPath = {};
                 LogMsg(tr("Detected mismatch between the save paths of the recovered category and the current save path of the torrent."
                           " Torrent is now switched to Manual mode."
-                          " Torrent: \"%1\". Category: \"%2\"").arg(torrentID.toString(), category), Log::WARNING);
+                          " Torrent: \"%1\". Category: \"%2\"").arg(torrentID.toString(), category), Log::INFO);
             }
         }
     }
@@ -1565,12 +1568,12 @@ void SessionImpl::processNextResumeData(ResumeSessionContext *context)
         {
             LogMsg(tr("Detected inconsistent data: tag is missing from the configuration file."
                       " Tag will be recovered."
-                      " Torrent: \"%1\". Tag: \"%2\"").arg(torrentID.toString(), tag.toString()), Log::WARNING);
+                      " Torrent: \"%1\". Tag: \"%2\"").arg(torrentID.toString(), tag.toString()), Log::INFO);
             return false;
         }
 
         LogMsg(tr("Detected inconsistent data: invalid tag. Torrent: \"%1\". Tag: \"%2\"")
-               .arg(torrentID.toString(), tag.toString()), Log::WARNING);
+               .arg(torrentID.toString(), tag.toString()), Log::INFO);
         return true;
     });
 
@@ -1720,6 +1723,23 @@ void SessionImpl::initializeNativeSession()
     LogMsg(tr("Peer Exchange (PeX) support: %1").arg(isPeXEnabled() ? tr("ON") : tr("OFF")), Log::INFO);
     LogMsg(tr("Anonymous mode: %1").arg(isAnonymousModeEnabled() ? tr("ON") : tr("OFF")), Log::INFO);
     LogMsg(tr("Encryption support: %1").arg((encryption() == 0) ? tr("ON") : ((encryption() == 1) ? tr("FORCED") : tr("OFF"))), Log::INFO);
+	LogMsg(tr("setAllowedFastSetSize: %1").arg(allowedFastSetSize()), Log::INFO);
+	LogMsg(tr("cacheBufferChunkSize: %1").arg(cacheBufferChunkSize()), Log::INFO);
+	LogMsg(tr("useDiskCachePool: %1").arg(useDiskCachePool() ? tr("ON") : tr("OFF")), Log::INFO);
+	LogMsg(tr("setSendNotSentLowWatermark: %1").arg(sendNotSentLowWatermark()), Log::INFO);
+	LogMsg(tr("setCloseRedundantConnections: %1").arg(closeRedundantConnections() ? tr("ON") : tr("OFF")), Log::INFO);
+	LogMsg(tr("setDhtUploadRateLimit: %1").arg(dhtUploadRateLimit()), Log::INFO);
+	LogMsg(tr("setInactivityTimeout: %1").arg(inactivityTimeout()), Log::INFO);
+	LogMsg(tr("setMaxAllowedInRequestQueue: %1").arg(maxAllowedInRequestQueue()), Log::INFO);
+	LogMsg(tr("setMaxFailCount: %1").arg(maxFailCount()), Log::INFO);
+	LogMsg(tr("setHttpRecvBufferSize: %1").arg(httpRecvBufferSize()), Log::INFO);
+	LogMsg(tr("setMaxRejects: %1").arg(maxRejects()), Log::INFO);
+	LogMsg(tr("setNoAtimeStorage: %1").arg(noAtimeStorage() ? tr("ON") : tr("OFF")), Log::INFO);
+	LogMsg(tr("setPeerTimeout: %1").arg(peerTimeout()), Log::INFO);
+	LogMsg(tr("setReadCacheLineSize: %1").arg(readCacheLineSize()), Log::INFO);
+	LogMsg(tr("setRequestTimeout: %1").arg(requestTimeout()), Log::INFO);
+	LogMsg(tr("setUseReadCache: %1").arg(useReadCache() ? tr("ON") : tr("OFF")), Log::INFO);
+	LogMsg(tr("setWriteCacheLineSize: %1").arg(writeCacheLineSize()), Log::INFO);
 
     m_nativeSession->set_alert_notify([this]()
     {
@@ -2112,32 +2132,32 @@ lt::settings_pack SessionImpl::loadLTSettings() const
         break;
     }
 
-    settingsPack.set_bool(lt::settings_pack::allowed_fast_set_size, false);
-    settingsPack.set_bool(lt::settings_pack::close_redundant_connections, false);
-    settingsPack.set_int(lt::settings_pack::dht_upload_rate_limit, 20000);
-    settingsPack.set_int(lt::settings_pack::inactivity_timeout, 20);
-    settingsPack.set_int(lt::settings_pack::max_allowed_in_request_queue, 2000);
-    settingsPack.set_int(lt::settings_pack::max_failcount, 1);
-    settingsPack.set_int(lt::settings_pack::max_http_recv_buffer_size, 6291456);
-    settingsPack.set_int(lt::settings_pack::max_rejects, 10);
-    settingsPack.set_bool(lt::settings_pack::no_atime_storage, true);
-    settingsPack.set_int(lt::settings_pack::peer_timeout, 20);
-    settingsPack.set_int(lt::settings_pack::read_cache_line_size, 20);
-    settingsPack.set_int(lt::settings_pack::request_timeout, 10);
-    settingsPack.set_bool(lt::settings_pack::use_read_cache, true);
-    settingsPack.set_int(lt::settings_pack::write_cache_line_size, 256);
+    settingsPack.set_int(lt::settings_pack::allowed_fast_set_size, allowedFastSetSize());
+    settingsPack.set_bool(lt::settings_pack::cache_buffer_chunk_size, cacheBufferChunkSize());
+    settingsPack.set_bool(lt::settings_pack::use_disk_cache_pool, useDiskCachePool());
+    settingsPack.set_bool(lt::settings_pack::close_redundant_connections, closeRedundantConnections());
+    settingsPack.set_int(lt::settings_pack::dht_upload_rate_limit, dhtUploadRateLimit());
+    settingsPack.set_int(lt::settings_pack::inactivity_timeout, inactivityTimeout());
+    settingsPack.set_int(lt::settings_pack::max_allowed_in_request_queue, maxAllowedInRequestQueue());
+    settingsPack.set_int(lt::settings_pack::max_failcount, maxFailCount());
+    settingsPack.set_int(lt::settings_pack::max_http_recv_buffer_size, httpRecvBufferSize());
+    settingsPack.set_int(lt::settings_pack::max_rejects, maxRejects());
+    settingsPack.set_bool(lt::settings_pack::no_atime_storage, noAtimeStorage());
+    settingsPack.set_int(lt::settings_pack::peer_timeout, peerTimeout());
+    settingsPack.set_int(lt::settings_pack::read_cache_line_size, readCacheLineSize());
+    settingsPack.set_int(lt::settings_pack::request_timeout, requestTimeout());
+    settingsPack.set_bool(lt::settings_pack::use_read_cache, useReadCache());
+    settingsPack.set_int(lt::settings_pack::write_cache_line_size, writeCacheLineSize());
 
     // old and invalid
-    //settingsPack.set_bool(lt::settings_pack::auto_upload_slots, false);
     //settingsPack.set_int(lt::settings_pack::cache_buffer_chunk_size, 128);
+    //settingsPack.set_bool(lt::settings_pack::use_disk_cache_pool, true);
+
+    //settingsPack.set_bool(lt::settings_pack::auto_upload_slots, false);
     //settingsPack.set_int(lt::settings_pack::disk_cache_algorithm, 2);
     //settingsPack.set_bool(lt::settings_pack::explicit_read_cache, false);
-    //settingsPack.set_bool(lt::settings_pack::lock_disk_cache, false);
-    //settingsPack.set_bool(lt::settings_pack::low_prio_disk, false);
-    //settingsPack.set_int(lt::settings_pack::network_threads, 0);
     //settingsPack.set_bool(lt::settings_pack::optimize_hashing_for_speed, true);
     //settingsPack.set_int(lt::settings_pack::read_job_every, 100);
-    //settingsPack.set_bool(lt::settings_pack::use_disk_cache_pool, true);
     //settingsPack.set_bool(lt::settings_pack::utp_dynamic_sock_buf, true);
 
     return settingsPack;
@@ -2189,7 +2209,7 @@ void SessionImpl::applyNetworkInterfacesSettings(lt::settings_pack &settingsPack
             }
             else
             {
-                LogMsg(tr("Could not find GUID of network interface. Interface: \"%1\"").arg(ip), Log::WARNING);
+                LogMsg(tr("Could not find GUID of network interface. Interface: \"%1\"").arg(ip), Log::INFO);
                 // Since we can't get the GUID, we'll pass the interface name instead.
                 // Otherwise an empty string will be passed to outgoing_interface which will cause IP leak.
                 for (const QString &portString : asConst(portStrings))
@@ -2435,7 +2455,7 @@ void SessionImpl::torrentContentRemovingFinished(const QString &torrentName, con
     else
     {
         LogMsg(tr("Failed to remove torrent content. Torrent: \"%1\". Error: \"%2\"")
-            .arg(torrentName, errorMessage), Log::WARNING);
+            .arg(torrentName, errorMessage), Log::INFO);
     }
 }
 
@@ -3201,7 +3221,7 @@ void SessionImpl::exportTorrentFile(const Torrent *torrent, const Path &folderPa
     if (!result)
     {
         LogMsg(tr("Failed to export torrent. Torrent: \"%1\". Destination: \"%2\". Reason: \"%3\"")
-               .arg(torrent->name(), newTorrentPath.toString(), result.error()), Log::WARNING);
+               .arg(torrent->name(), newTorrentPath.toString(), result.error()), Log::INFO);
     }
 }
 
@@ -4049,7 +4069,7 @@ void SessionImpl::updateTrackersFromURL()
                 return;
             }
 
-            LogMsg(tr("Failed to update tracker list. Reason: \"%1\"").arg(result.errorString), Log::WARNING);
+            LogMsg(tr("Failed to update tracker list. Reason: \"%1\"").arg(result.errorString), Log::INFO);
         });
     }
 }
@@ -4181,7 +4201,7 @@ void SessionImpl::setBannedIPs(const QStringList &newList)
         {
             LogMsg(tr("Rejected invalid IP address while applying the list of banned IP addresses. IP: \"%1\"")
                    .arg(ip)
-                , Log::WARNING);
+                , Log::INFO);
         }
     }
     // now we have to sort IPs and make them unique
@@ -4627,17 +4647,62 @@ void SessionImpl::setSendBufferWatermark(const int value)
     configureDeferred();
 }
 
-bool SessionImpl::allowedFastSetSize() const
+int SessionImpl::allowedFastSetSize() const
 {
     return m_allowedFastSetSize;
 }
 
-void SessionImpl::setAllowedFastSetSize(const bool value)
+void SessionImpl::setAllowedFastSetSize(const int value)
 {
     if (value == m_allowedFastSetSize) return;
 
     m_allowedFastSetSize = value;
     configureDeferred();
+    LogMsg(tr("setAllowedFastSetSize: %1").arg(value), Log::INFO);
+
+}
+
+int SessionImpl::cacheBufferChunkSize() const
+{
+    return m_cacheBufferChunkSize;
+}
+
+void SessionImpl::setCacheBufferChunkSize(const int value)
+{
+    if (value == m_cacheBufferChunkSize) return;
+
+    m_cacheBufferChunkSize = value;
+    configureDeferred();
+    LogMsg(tr("cacheBufferChunkSize: %1").arg(value), Log::INFO);
+
+}
+
+bool SessionImpl::useDiskCachePool() const
+{
+    return m_useDiskCachePool;
+}
+
+void SessionImpl::setUseDiskCachePool(const bool value)
+{
+    if (value == m_useDiskCachePool) return;
+
+    m_useDiskCachePool = value;
+    configureDeferred();
+    LogMsg(tr("useDiskCachePool: %1").arg(value ? tr("ON") : tr("OFF")), Log::INFO);
+}
+
+int SessionImpl::sendNotSentLowWatermark() const
+{
+    return m_sendNotSentLowWatermark;
+}
+
+void SessionImpl::setSendNotSentLowWatermark(const int value)
+{
+    if (value == m_sendNotSentLowWatermark) return;
+
+    m_sendNotSentLowWatermark = value;
+    configureDeferred();
+    LogMsg(tr("setSendNotSentLowWatermark: %1").arg(value), Log::INFO);
 }
 
 bool SessionImpl::closeRedundantConnections() const
@@ -4651,6 +4716,7 @@ void SessionImpl::setCloseRedundantConnections(const bool value)
 
     m_closeRedundantConnections = value;
     configureDeferred();
+    LogMsg(tr("setCloseRedundantConnections: %1").arg(value ? tr("ON") : tr("OFF")), Log::INFO);
 }
 
 int SessionImpl::dhtUploadRateLimit() const
@@ -4664,6 +4730,7 @@ void SessionImpl::setDhtUploadRateLimit(const int value)
 
     m_dhtUploadRateLimit = value;
     configureDeferred();
+    LogMsg(tr("setDhtUploadRateLimit: %1").arg(value), Log::INFO);
 }
 
 int SessionImpl::inactivityTimeout() const
@@ -4677,6 +4744,7 @@ void SessionImpl::setInactivityTimeout(const int value)
 
     m_inactivityTimeout = value;
     configureDeferred();
+    LogMsg(tr("setInactivityTimeout: %1").arg(value), Log::INFO);
 }
 
 int SessionImpl::maxAllowedInRequestQueue() const
@@ -4690,6 +4758,7 @@ void SessionImpl::setMaxAllowedInRequestQueue(const int value)
 
     m_maxAllowedInRequestQueue = value;
     configureDeferred();
+    LogMsg(tr("setMaxAllowedInRequestQueue: %1").arg(value), Log::INFO);
 }
 
 int SessionImpl::maxFailCount() const
@@ -4703,6 +4772,7 @@ void SessionImpl::setMaxFailCount(const int value)
 
     m_maxFailCount = value;
     configureDeferred();
+    LogMsg(tr("setMaxFailCount: %1").arg(value), Log::INFO);
 }
 
 int SessionImpl::httpRecvBufferSize() const
@@ -4716,6 +4786,7 @@ void SessionImpl::setHttpRecvBufferSize(const int value)
 
     m_httpRecvBufferSize = value;
     configureDeferred();
+    LogMsg(tr("setHttpRecvBufferSize: %1").arg(value), Log::INFO);
 }
 
 int SessionImpl::maxRejects() const
@@ -4729,6 +4800,7 @@ void SessionImpl::setMaxRejects(const int value)
 
     m_maxRejects = value;
     configureDeferred();
+    LogMsg(tr("setMaxRejects: %1").arg(value), Log::INFO);
 }
 
 bool SessionImpl::noAtimeStorage() const
@@ -4742,6 +4814,7 @@ void SessionImpl::setNoAtimeStorage(const bool value)
 
     m_noAtimeStorage = value;
     configureDeferred();
+    LogMsg(tr("setNoAtimeStorage: %1").arg(value ? tr("ON") : tr("OFF")), Log::INFO);
 }
 
 int SessionImpl::peerTimeout() const
@@ -4755,6 +4828,7 @@ void SessionImpl::setPeerTimeout(const int value)
 
     m_peerTimeout = value;
     configureDeferred();
+    LogMsg(tr("setPeerTimeout: %1").arg(value), Log::INFO);
 }
 
 int SessionImpl::readCacheLineSize() const
@@ -4768,6 +4842,7 @@ void SessionImpl::setReadCacheLineSize(const int value)
 
     m_readCacheLineSize = value;
     configureDeferred();
+    LogMsg(tr("setReadCacheLineSize: %1").arg(value), Log::INFO);
 }
 
 int SessionImpl::requestTimeout() const
@@ -4781,6 +4856,7 @@ void SessionImpl::setRequestTimeout(const int value)
 
     m_requestTimeout = value;
     configureDeferred();
+    LogMsg(tr("setRequestTimeout: %1").arg(value), Log::INFO);
 }
 
 bool SessionImpl::useReadCache() const
@@ -4794,6 +4870,7 @@ void SessionImpl::setUseReadCache(const bool value)
 
     m_useReadCache = value;
     configureDeferred();
+    LogMsg(tr("setUseReadCache: %1").arg(value ? tr("ON") : tr("OFF")), Log::INFO);
 }
 
 int SessionImpl::writeCacheLineSize() const
@@ -4807,6 +4884,7 @@ void SessionImpl::setWriteCacheLineSize(const int value)
 
     m_writeCacheLineSize = value;
     configureDeferred();
+    LogMsg(tr("setWriteCacheLineSize: %1").arg(value), Log::INFO);
 }
 
 int SessionImpl::sendBufferLowWatermark() const
@@ -5679,7 +5757,7 @@ void SessionImpl::storeCategories() const
     if (!result)
     {
         LogMsg(tr("Failed to save Categories configuration. File: \"%1\". Error: \"%2\"")
-               .arg(path.toString(), result.error()), Log::WARNING);
+               .arg(path.toString(), result.error()), Log::INFO);
     }
 }
 
@@ -5717,7 +5795,7 @@ void SessionImpl::loadCategories()
     const auto readResult = Utils::IO::readFile(path, fileMaxSize);
     if (!readResult)
     {
-        LogMsg(tr("Failed to load Categories. %1").arg(readResult.error().message), Log::WARNING);
+        LogMsg(tr("Failed to load Categories. %1").arg(readResult.error().message), Log::INFO);
         return;
     }
 
@@ -5726,14 +5804,14 @@ void SessionImpl::loadCategories()
     if (jsonError.error != QJsonParseError::NoError)
     {
         LogMsg(tr("Failed to parse Categories configuration. File: \"%1\". Error: \"%2\"")
-               .arg(path.toString(), jsonError.errorString()), Log::WARNING);
+               .arg(path.toString(), jsonError.errorString()), Log::INFO);
         return;
     }
 
     if (!jsonDoc.isObject())
     {
         LogMsg(tr("Failed to load Categories configuration. File: \"%1\". Error: \"Invalid data format\"")
-               .arg(path.toString()), Log::WARNING);
+               .arg(path.toString()), Log::INFO);
         return;
     }
 
@@ -5862,7 +5940,7 @@ void SessionImpl::handleIPFilterError()
     processBannedIPs(filter);
     m_nativeSession->set_ip_filter(filter);
 
-    LogMsg(tr("Failed to parse the IP filter file"), Log::WARNING);
+    LogMsg(tr("Failed to parse the IP filter file"), Log::INFO);
     emit IPFilterParsed(true, 0);
 }
 
@@ -5925,7 +6003,7 @@ void SessionImpl::handleAddTorrentAlert(const lt::add_torrent_alert *alert)
     if (alert->error)
     {
         const QString msg = QString::fromStdString(alert->message());
-        LogMsg(tr("Failed to load torrent. Reason: \"%1\"").arg(msg), Log::WARNING);
+        LogMsg(tr("Failed to load torrent. Reason: \"%1\"").arg(msg), Log::INFO);
         emit loadTorrentFailed(msg);
 
         const lt::add_torrent_params &params = alert->params;
@@ -6174,7 +6252,7 @@ TorrentImpl *SessionImpl::createTorrent(const lt::torrent_handle &nativeHandle, 
 
     // Torrent could have error just after adding to libtorrent
     if (torrent->hasError())
-        LogMsg(tr("Torrent errored. Torrent: \"%1\". Error: \"%2\"").arg(torrent->name(), torrent->error()), Log::WARNING);
+        LogMsg(tr("Torrent errored. Torrent: \"%1\". Error: \"%2\"").arg(torrent->name(), torrent->error()), Log::INFO);
 
     return torrent;
 }
@@ -6223,7 +6301,7 @@ void SessionImpl::handleTorrentNeedCertAlert(const lt::torrent_need_cert_alert *
     if (!torrent->applySSLParameters())
     {
         LogMsg(tr("Torrent is missing SSL parameters. Torrent: \"%1\". Message: \"%2\"").arg(torrent->name(), QString::fromStdString(alert->message()))
-            , Log::WARNING);
+            , Log::INFO);
     }
 }
 
@@ -6274,7 +6352,7 @@ void SessionImpl::handleFileErrorAlert(const lt::file_error_alert *alert)
         const QString msg = QString::fromStdString(alert->message());
         LogMsg(tr("File error alert. Torrent: \"%1\". File: \"%2\". Reason: \"%3\"")
                 .arg(torrent->name(), QString::fromUtf8(alert->filename()), msg)
-            , Log::WARNING);
+            , Log::INFO);
         emit fullDiskError(torrent, msg);
     }
 
@@ -6283,7 +6361,7 @@ void SessionImpl::handleFileErrorAlert(const lt::file_error_alert *alert)
 
 void SessionImpl::handlePortmapWarningAlert(const lt::portmap_error_alert *alert)
 {
-    LogMsg(tr("UPnP/NAT-PMP port mapping failed. Message: \"%1\"").arg(QString::fromStdString(alert->message())), Log::WARNING);
+    LogMsg(tr("UPnP/NAT-PMP port mapping failed. Message: \"%1\"").arg(QString::fromStdString(alert->message())), Log::INFO);
 }
 
 void SessionImpl::handlePortmapAlert(const lt::portmap_alert *alert)
@@ -6339,13 +6417,13 @@ void SessionImpl::handleUrlSeedAlert(const lt::url_seed_alert *alert)
     {
         LogMsg(tr("URL seed connection failed. Torrent: \"%1\". URL: \"%2\". Error: \"%3\"")
             .arg(torrent->name(), QString::fromUtf8(alert->server_url()), QString::fromStdString(alert->message()))
-            , Log::WARNING);
+            , Log::INFO);
     }
     else
     {
         LogMsg(tr("Received error message from URL seed. Torrent: \"%1\". URL: \"%2\". Message: \"%3\"")
             .arg(torrent->name(), QString::fromUtf8(alert->server_url()), QString::fromUtf8(alert->error_message()))
-            , Log::WARNING);
+            , Log::INFO);
     }
 }
 
@@ -6542,7 +6620,7 @@ void SessionImpl::handleStorageMovedFailedAlert(const lt::storage_moved_failed_a
             : Path(alert->handle.status(lt::torrent_handle::query_save_path).save_path));
     const QString errorMessage = QString::fromStdString(alert->message());
     LogMsg(tr("Failed to move torrent. Torrent: \"%1\". Source: \"%2\". Destination: \"%3\". Reason: \"%4\"")
-           .arg(torrentName, currentLocation.toString(), currentJob.path.toString(), errorMessage), Log::WARNING);
+           .arg(torrentName, currentLocation.toString(), currentJob.path.toString(), errorMessage), Log::INFO);
 
     handleMoveTorrentStorageJobFinished(currentLocation);
 }
@@ -6588,7 +6666,7 @@ void SessionImpl::handleSocks5Alert(const lt::socks5_alert *alert) const
                 .arg(QString::fromStdString(addr.to_string()), QString::number(alert->ip.port()));
         LogMsg(tr("SOCKS5 proxy error. Address: %1. Message: \"%2\".")
                 .arg(endpoint, Utils::String::fromLocal8Bit(alert->error.message()))
-                , Log::WARNING);
+                , Log::INFO);
     }
 }
 
@@ -6597,7 +6675,7 @@ void SessionImpl::handleI2PAlert(const lt::i2p_alert *alert) const
     if (alert->error)
     {
         LogMsg(tr("I2P error. Message: \"%1\".")
-            .arg(QString::fromStdString(alert->message())), Log::WARNING);
+            .arg(QString::fromStdString(alert->message())), Log::INFO);
     }
 }
 
@@ -6749,7 +6827,7 @@ void SessionImpl::handleRemovedTorrent(const TorrentID &torrentID, const QString
     {
         LogMsg(tr("Failed to remove partfile. Torrent: \"%1\". Reason: \"%2\".")
                .arg(removingTorrentDataIter->name, partfileRemoveError)
-               , Log::WARNING);
+               , Log::INFO);
     }
 
     if ((removingTorrentDataIter->removeOption == TorrentRemoveOption::RemoveContent)
